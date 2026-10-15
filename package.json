@@ -1,0 +1,14 @@
+{
+  "name": "literythym-online",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LITERYTHYM endless rhythm game with casual random online 1v1 matchmaking",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}
