@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LITERYTHYM</title>
+<style>
+  :root { color-scheme: dark; --bg:#080a12; --panel:#101421; --muted:#858da5; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 50% 0%,#151b31 0%,var(--bg) 62%); color:#f5f7ff; font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif; display:flex; justify-content:center; }
+  .wrap { width:min(900px,100%); padding:20px 16px 28px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:15px; }
+  .logo { font-size:clamp(1.5rem,5vw,2.5rem); font-weight:950; letter-spacing:.14em; line-height:1; }
+  .logo span { color:#a3b6ff; text-shadow:0 0 22px #617dff80; }
+  .tag { color:var(--muted); font-size:.75rem; letter-spacing:.17em; margin-top:7px; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+  .stat { background:#101421d9; border:1px solid #272e43; border-radius:12px; padding:10px 12px; min-width:0; }
+  .stat label { display:block; color:var(--muted); font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; }
+  .stat strong { display:block; font-size:clamp(1rem,3vw,1.45rem); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .gamebox { position:relative; overflow:hidden; border:1px solid #2b3450; border-radius:18px; background:#090c16; box-shadow:0 0 36px #536cff10,inset 0 0 45px #536cff08; }
+  canvas { display:block; width:100%; height:auto; aspect-ratio: 3 / 4; max-height:66vh; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:22px; background:#080b14dc; backdrop-filter:blur(7px); }
+  .overlay.hidden { display:none; }
+  .overlay h1 { font-size:clamp(2rem,8vw,4rem); margin:0; letter-spacing:.12em; text-shadow:0 0 25px #788cff77; }
+  .overlay p { max-width:400px; line-height:1.55; color:#b6bfd8; }
+  button { color:white; border:1px solid #91a3ff; background:linear-gradient(135deg,#586cff,#7954f5); border-radius:12px; padding:12px 24px; font:inherit; font-weight:800; cursor:pointer; box-shadow:0 0 22px #647bff3b; }
+  button:hover { filter:brightness(1.13); transform:translateY(-1px); }
+  .subbuttons { display:flex; gap:8px; justify-content:center; margin-top:12px; }
+  .subbuttons button { padding:9px 16px; background:#141a2a; border-color:#303a57; box-shadow:none; }
+  .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+  .key { border-radius:12px; padding:10px 6px; text-align:center; background:#101421; border:1px solid #252d43; color:#fff; transition:transform .07s,filter .07s; }
+  .key b { font-size:1.2rem; display:block; }
+  .key small { color:#aab2c8; font-size:.65rem; letter-spacing:.12em; }
+  .key.active { transform:scale(.96); filter:brightness(1.7); }
+  .key.red { border-color:#ff4d6860; box-shadow:inset 0 0 18px #ff36520d; }
+  .key.blue { border-color:#4b9bff60; box-shadow:inset 0 0 18px #328bff0d; }
+  .key.green { border-color:#3cf0a060; box-shadow:inset 0 0 18px #22dc7c0d; }
+  .key.yellow { border-color:#ffe45c60; box-shadow:inset 0 0 18px #ffe45c0d; }
+  .hint { color:var(--muted); text-align:center; font-size:.78rem; margin:12px 0 0; line-height:1.5; }
+  .header-actions { display:flex; gap:8px; align-items:center; }
+  .header-actions button { padding:9px 13px; background:#141a2a; border-color:#303a57; box-shadow:none; }
+  .settings-backdrop { position:fixed; inset:0; z-index:20; background:#03050bd9; backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; padding:16px; }
+  .settings-backdrop.hidden { display:none; }
+  .settings-panel { width:min(480px,100%); max-height:90vh; overflow:auto; border:1px solid #343e5d; border-radius:18px; background:#0d1220; padding:20px; box-shadow:0 0 55px #526bff22; }
+  .settings-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  .settings-head h2 { margin:0; letter-spacing:.08em; }
+  .settings-head button { padding:7px 12px; background:#151b2b; border-color:#303a57; box-shadow:none; }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; border-bottom:1px solid #242c41; }
+  .setting-info { min-width:0; }
+  .setting-info strong { display:block; }
+  .setting-info small { display:block; color:var(--muted); margin-top:4px; line-height:1.35; }
+  .remap-btn { min-width:100px; padding:9px 12px; background:#151b2b; border:1px solid #394562; box-shadow:none; }
+  .remap-btn.listening { border-color:#a3b6ff; color:#cbd5ff; box-shadow:0 0 16px #8196ff30; }
+  select { color:#fff; background:#151b2b; border:1px solid #394562; border-radius:9px; padding:9px; max-width:150px; }
+  .settings-note { color:var(--muted); font-size:.78rem; line-height:1.45; margin:14px 0 0; }
+  .settings-footer { display:flex; justify-content:space-between; gap:8px; margin-top:16px; }
+  .settings-footer button { padding:10px 14px; }
+  .settings-footer .secondary { background:#151b2b; border-color:#303a57; box-shadow:none; }
+  @media (min-width:650px) { .game-area { width:min(570px,100%); margin:0 auto; } canvas { max-height:60vh; aspect-ratio: 3 / 4; } }
+  @media (max-width:440px) { .wrap{padding:14px 10px 22px} .stat{padding:8px} .stats{gap:5px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><div class="logo">LITE<span>RYTHYM</span></div><div class="tag">ENDLESS NEON RHYTHM</div></div>
+    <div class="header-actions"><button id="settingsBtn">⚙ Settings</button><button id="pauseBtn" style="display:none">Ⅱ Pause</button></div>
+  </header>
+  <div class="stats">
+    <div class="stat"><label>Score</label><strong id="score">0</strong></div>
+    <div class="stat"><label>Best</label><strong id="best">0</strong></div>
+    <div class="stat"><label>Combo</label><strong id="combo">0</strong></div>
+    <div class="stat"><label>Speed</label><strong id="speed">1.0×</strong></div>
+  </div>
+  <div class="game-area">
+    <div class="gamebox">
+      <canvas id="game" width="600" height="800" aria-label="LITERYTHYM falling note game"></canvas>
+      <div class="overlay" id="overlay">
+        <h1 id="overlayTitle">LITERYTHYM</h1>
+        <p id="overlayText">Four columns. Four keys. One endless run.<br>Hit the neon notes when they reach the line.</p>
+        <button id="startBtn">START RUN</button>
+      </div>
+    </div>
+    <div class="keys">
+      <div class="key red" data-key="a"><b>A</b><small>RED</small></div>
+      <div class="key blue" data-key="s"><b>S</b><small>BLUE</small></div>
+      <div class="key green" data-key="d"><b>D</b><small>GREEN</small></div>
+      <div class="key yellow" data-key="f"><b>F</b><small>YELLOW</small></div>
+    </div>
+    <div class="subbuttons"><button id="restartBtn">↻ Restart</button><button id="soundBtn">♪ Sound: On</button></div>
+    <p class="hint" id="hintText">Press A · S · D · F when a note reaches the glowing hit line.<br>Miss too many notes and your run ends. Press Esc to pause.</p>
+  </div>
+</div>
+<div class="settings-backdrop hidden" id="settingsBackdrop" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="settings-panel">
+    <div class="settings-head"><h2 id="settingsTitle">⚙ SETTINGS</h2><button id="closeSettings">✕ Close</button></div>
+    <div class="setting-row"><div class="setting-info"><strong>Red lane</strong><small>Remap the red note key</small></div><button class="remap-btn" data-remap="0">A</button></div>
+    <div class="setting-row"><div class="setting-info"><strong>Blue lane</strong><small>Remap the blue note key</small></div><button class="remap-btn" data-remap="1">S</button></div>
+    <div class="setting-row"><div class="setting-info"><strong>Green lane</strong><small>Remap the green note key</small></div><button class="remap-btn" data-remap="2">D</button></div>
+    <div class="setting-row"><div class="setting-info"><strong>Yellow lane</strong><small>Remap the yellow note key</small></div><button class="remap-btn" data-remap="3">F</button></div>
+    <div class="setting-row"><div class="setting-info"><strong>Sound effects</strong><small>Hit tones and miss sounds</small></div><button class="remap-btn" id="settingsSound">On</button></div>
+    <p class="settings-note" id="remapHint">Click a lane's key button, then press an unused letter. Settings are saved in this browser.</p>
+    <div class="settings-footer"><button class="secondary" id="resetSettings">Reset defaults</button><button id="doneSettings">Done</button></div>
+  </div>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const colors = ['#ff4968','#45a0ff','#35f0a0','#ffe45c'];
+  const defaultKeys = ['a','s','d','f'];
+  let keys = [...defaultKeys], missLimit = 10, settingsOpen = false, remapIndex = -1;
+  const W = canvas.width, H = canvas.height, hitY = 680;
+  let notes=[], particles=[], score=0, combo=0, best=0, misses=0, running=false, paused=false, over=false;
+  let last=0, spawnTimer=0, elapsed=0, speed=1, flash=0, message='', messageTimer=0, soundOn=true, audio=null;
+  try {
+    best = Number(localStorage.getItem('literythym_best') || 0);
+    const saved = JSON.parse(localStorage.getItem('literythym_settings') || 'null');
+    if(saved && Array.isArray(saved.keys) && saved.keys.length===4 && saved.keys.every(k=>typeof k==='string') && new Set(saved.keys).size===4) keys=saved.keys.map(k=>k.toLowerCase());
+    if(saved && typeof saved.soundOn==='boolean') soundOn=saved.soundOn;
+  } catch(e) {}
+  $('best').textContent = best;
+  const laneNames = ['RED','BLUE','GREEN','YELLOW'];
+  function saveSettings(){ try{localStorage.setItem('literythym_settings',JSON.stringify({keys,soundOn}));}catch(e){} updateKeyUI(); updateSettingsUI(); }
+  function updateKeyUI(){ document.querySelectorAll('[data-key]').forEach((el,i)=>{el.dataset.key=keys[i];el.querySelector('b').textContent=keys[i].toUpperCase();}); $('hintText').innerHTML='Press '+keys.map(k=>k.toUpperCase()).join(' · ')+' when notes reach the glowing hit line.<br>10 misses ends your run. Speed keeps increasing. Press Esc to pause.'; }
+  function updateSettingsUI(){ document.querySelectorAll('[data-remap]').forEach(b=>{const i=Number(b.dataset.remap);b.classList.toggle('listening',remapIndex===i);b.textContent=remapIndex===i?'Press key…':keys[i].toUpperCase();}); $('settingsSound').textContent=soundOn?'On':'Off'; $('soundBtn').textContent='♪ Sound: '+(soundOn?'On':'Off'); }
+  function openSettings(){ if(running&&!paused) togglePause(); settingsOpen=true; remapIndex=-1; updateSettingsUI(); $('settingsBackdrop').classList.remove('hidden'); }
+  function closeSettings(){settingsOpen=false;remapIndex=-1;$('settingsBackdrop').classList.add('hidden');updateSettingsUI();}
+  const laneW = W/4;
+  function audioReady(){ if(!audio) { try { audio = new (window.AudioContext||window.webkitAudioContext)(); } catch(e) {} } if(audio && audio.state==='suspended') audio.resume(); }
+  function beep(freq=440,duration=.075,volume=.04,type='sine') {
+    if(!soundOn || !audio) return;
+    try { const o=audio.createOscillator(), g=audio.createGain(); o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(volume,audio.currentTime); g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration); o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime+duration); } catch(e) {}
+  }
+  function updateStats(){
+    $('score').textContent=score.toLocaleString(); $('combo').textContent=combo;
+    $('speed').textContent=speed.toFixed(1)+'×'; $('best').textContent=best.toLocaleString();
+  }
+  function start(){
+    audioReady(); notes=[]; particles=[]; score=0; combo=0; misses=0; elapsed=0; speed=1; spawnTimer=.6; flash=0; message='READY?'; messageTimer=.8; running=true; paused=false; over=false; last=performance.now();
+    $('overlay').classList.add('hidden'); $('pauseBtn').style.display='inline-block'; $('pauseBtn').textContent='Ⅱ Pause'; updateStats(); requestAnimationFrame(loop);
+  }
+  function endRun(){
+    running=false; over=true; $('pauseBtn').style.display='none';
+    if(score>best){best=score;try{localStorage.setItem('literythym_best',best)}catch(e){}}
+    updateStats(); $('overlayTitle').textContent='RUN OVER'; $('overlayText').innerHTML=`Score: <b>${score.toLocaleString()}</b><br>Best: <b>${best.toLocaleString()}</b><br>Combo: ${combo} · Misses: ${misses}<br><br>One more run?`; $('startBtn').textContent='PLAY AGAIN'; $('overlay').classList.remove('hidden');
+  }
+  function togglePause(){
+    if(!running && !paused) return;
+    paused=!paused;
+    if(paused){ $('pauseBtn').textContent='▶ Resume'; $('overlayTitle').textContent='PAUSED'; $('overlayText').textContent='Catch your breath. The notes are waiting.'; $('startBtn').textContent='RESUME'; $('overlay').classList.remove('hidden'); }
+    else { $('overlay').classList.add('hidden'); $('pauseBtn').textContent='Ⅱ Pause'; last=performance.now(); requestAnimationFrame(loop); }
+  }
+  function spawn(){
+    let lane=Math.floor(Math.random()*4);
+    // Occasionally create short, readable two-note patterns.
+    notes.push({lane,y:-28,size:19,hit:false});
+    if(elapsed>18 && Math.random()<Math.min(.28,(elapsed-18)/100)) {
+      let second=(lane+1+Math.floor(Math.random()*3))%4;
+      notes.push({lane:second,y:-98,size:19,hit:false});
+    }
+  }
+  function burst(x,y,color,count=10){
+    for(let i=0;i<count;i++){let a=Math.random()*Math.PI*2, v=50+Math.random()*210;particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.35+Math.random()*.4,max:.75,color,r:2+Math.random()*3});}
+  }
+  function press(k){
+    if(!running || paused) return;
+    const lane=keys.indexOf(k); if(lane<0) return;
+    audioReady();
+    const el=document.querySelector(`[data-key="${k}"]`); if(el){el.classList.add('active');setTimeout(()=>el.classList.remove('active'),85);}
+    const candidates=notes.filter(n=>n.lane===lane&&!n.hit).sort((a,b)=>Math.abs(a.y-hitY)-Math.abs(b.y-hitY));
+    const n=candidates[0], tolerance=56;
+    if(n && Math.abs(n.y-hitY)<=tolerance){
+      n.hit=true; const accuracy=Math.abs(n.y-hitY);
+      const points=accuracy<18?100:accuracy<36?70:50;
+      combo++; score+=points+Math.min(combo,50)*2;
+      message=accuracy<18?'PERFECT':accuracy<36?'GREAT':'GOOD'; messageTimer=.42;
+      burst(laneW*(lane+.5),hitY,colors[lane],accuracy<18?18:11);
+      beep([260,330,392,494][lane]*(accuracy<18?1.25:1),.09,.055,'triangle');
+    } else {
+      combo=0; misses++; message='MISS'; messageTimer=.4; flash=.2; beep(110,.13,.035,'square');
+      if(misses>=missLimit) endRun();
+    }
+    updateStats();
+  }
+  function drawBackground(){
+    ctx.clearRect(0,0,W,H);
+    const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b1020');g.addColorStop(1,'#080a12');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    // subtle grid
+    ctx.strokeStyle='#a9baff0a';ctx.lineWidth=1;
+    for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for(let i=0;i<4;i++){
+      const x=i*laneW;
+      ctx.fillStyle=colors[i]+ '07';ctx.fillRect(x,0,laneW,H);
+      if(i>0){ctx.strokeStyle='#69759a35';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+      ctx.save();ctx.shadowBlur=18;ctx.shadowColor=colors[i];ctx.fillStyle=colors[i]+'12';ctx.fillRect(x+5,hitY-32,laneW-10,64);ctx.restore();
+    }
+    // hit line
+    ctx.save();ctx.shadowBlur=24;ctx.shadowColor='#dce5ff';ctx.strokeStyle='#dce5ff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,hitY);ctx.lineTo(W-12,hitY);ctx.stroke();ctx.restore();
+    for(let i=0;i<4;i++){
+      const cx=laneW*(i+.5);
+      ctx.save();ctx.shadowColor=colors[i];ctx.shadowBlur=17;ctx.strokeStyle=colors[i];ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(cx,hitY,23,0,Math.PI*2);ctx.stroke();
+      ctx.globalAlpha=.45;ctx.beginPath();ctx.arc(cx,hitY,31,0,Math.PI*2);ctx.stroke();ctx.restore();
+      ctx.fillStyle=colors[i];ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText(keys[i].toUpperCase(),cx,hitY+6);
+    }
+    ctx.textAlign='left';ctx.fillStyle='#77809c';ctx.font='12px system-ui';ctx.fillText('MISSES '+misses+'/'+missLimit,16,25);
+    // miss meter
+    for(let i=0;i<missLimit;i++){ctx.fillStyle=i<misses?'#ff4968':'#263047';ctx.fillRect(16+i*13,35,9,4);}
+  }
+  function drawNote(n){
+    const x=laneW*(n.lane+.5), c=colors[n.lane], r=n.size;
+    ctx.save();ctx.shadowColor=c;ctx.shadowBlur=25;
+    const grad=ctx.createLinearGradient(x-r,n.y-r,x+r,n.y+r);grad.addColorStop(0,'#ffffff');grad.addColorStop(.18,c);grad.addColorStop(1,c);
+    ctx.fillStyle=grad;ctx.beginPath();ctx.roundRect(x-r,n.y-r,r*2,r*2,7);ctx.fill();
+    ctx.shadowBlur=0;ctx.strokeStyle='#ffffffbb';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#09101b';ctx.font='bold 17px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(keys[n.lane].toUpperCase(),x,n.y+1);
+    ctx.restore();
+  }
+  function loop(now){
+    if(!running||paused) return;
+    const dt=Math.min((now-last)/1000,.04);last=now;elapsed+=dt;
+    speed=1+(elapsed/32); // endlessly increases over time, with no speed setting or cap
+    const spawnEvery=Math.max(.30,1.08-elapsed*.0065);
+    spawnTimer-=dt;if(spawnTimer<=0){spawn();spawnTimer+=spawnEvery/(1+(speed-1)*.12);}
+    const fallSpeed=220+Math.min(400,elapsed*5.5);
+    for(const n of notes){n.y+=fallSpeed*dt*speed;}
+    for(const n of notes){if(!n.hit&&n.y>hitY+60){n.hit=true;combo=0;misses++;message='MISS';messageTimer=.4;flash=.2;if(misses>=missLimit){endRun();break;}}}
+    notes=notes.filter(n=>n.y<H+40&&!n.hit);
+    for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt;p.life-=dt;}
+    particles=particles.filter(p=>p.life>0);
+    messageTimer=Math.max(0,messageTimer-dt);flash=Math.max(0,flash-dt);
+    drawBackground();
+    for(const n of notes)drawNote(n);
+    for(const p of particles){ctx.save();ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.shadowColor=p.color;ctx.shadowBlur=12;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();}
+    if(messageTimer>0){ctx.save();ctx.globalAlpha=Math.min(1,messageTimer*3);ctx.textAlign='center';ctx.font='900 28px system-ui';ctx.fillStyle=message==='MISS'?'#ff4968':'#ffffff';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=18;ctx.fillText(message,W/2,hitY-65);ctx.restore();}
+    if(flash>0){ctx.fillStyle=`rgba(255,45,90,${flash*.22})`;ctx.fillRect(0,0,W,H);}
+    updateStats();
+    if(running)requestAnimationFrame(loop);
+  }
+  function idleDraw(){drawBackground();requestAnimationFrame(idleDraw);}
+  $('startBtn').addEventListener('click',()=>{if(paused){paused=false;$('overlay').classList.add('hidden');$('pauseBtn').textContent='Ⅱ Pause';last=performance.now();requestAnimationFrame(loop);}else start();});
+  $('restartBtn').addEventListener('click',start);
+  $('pauseBtn').addEventListener('click',togglePause);
+  $('soundBtn').addEventListener('click',()=>{soundOn=!soundOn;if(soundOn)audioReady();saveSettings();});
+  $('settingsBtn').addEventListener('click',openSettings);
+  $('closeSettings').addEventListener('click',closeSettings);
+  $('doneSettings').addEventListener('click',closeSettings);
+  $('settingsBackdrop').addEventListener('click',e=>{if(e.target===$('settingsBackdrop'))closeSettings();});
+  document.querySelectorAll('[data-remap]').forEach(btn=>btn.addEventListener('click',()=>{remapIndex=Number(btn.dataset.remap);updateSettingsUI();$('remapHint').textContent='Press an unused letter key for the '+laneNames[remapIndex].toLowerCase()+' lane.';}));
+  $('settingsSound').addEventListener('click',()=>{soundOn=!soundOn;if(soundOn)audioReady();saveSettings();});
+  $('resetSettings').addEventListener('click',()=>{keys=[...defaultKeys];missLimit=10;soundOn=true;remapIndex=-1;saveSettings();$('remapHint').textContent='Settings reset to defaults.';});
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    if(settingsOpen){
+      if(e.key==='Escape'){e.preventDefault();closeSettings();return;}
+      if(remapIndex>=0){
+        if(/^[a-z]$/.test(k)){
+          e.preventDefault();
+          const conflict=keys.findIndex((key,i)=>key===k&&i!==remapIndex);
+          if(conflict!==-1){$('remapHint').textContent='That key is already used by the '+laneNames[conflict].toLowerCase()+' lane. Choose another letter.';return;}
+          keys[remapIndex]=k;remapIndex=-1;saveSettings();$('remapHint').textContent='Key changed! Settings saved in this browser.';
+        }
+        return;
+      }
+      return;
+    }
+    if(keys.includes(k)){e.preventDefault();if(!e.repeat)press(k);}
+    if(e.key==='Escape')togglePause();
+    if(e.code==='Space' && !running && !paused){e.preventDefault();start();}
+  });
+  // Canvas is designed for keyboard play; touch/click lane support helps on tablets.
+  canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect();const lane=Math.min(3,Math.floor((e.clientX-r.left)/r.width*4));press(keys[lane]);});
+  updateKeyUI(); updateSettingsUI();
+  drawBackground();
+})();
+</script>
+</body>
+</html>
