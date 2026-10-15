@@ -39,6 +39,12 @@
   .hint { color:var(--muted); text-align:center; font-size:.78rem; margin:12px 0 0; line-height:1.5; }
   .header-actions { display:flex; gap:8px; align-items:center; }
   .header-actions button { padding:9px 13px; background:#141a2a; border-color:#303a57; box-shadow:none; }
+  .online-bar { display:none; margin:0 0 12px; padding:10px 13px; border:1px solid #303a57; border-radius:12px; background:#101421; color:#b9c5e7; font-size:.85rem; line-height:1.4; }
+  .online-bar.visible { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .online-bar strong { color:#fff; }
+  .online-pill { color:#35f0a0; font-size:.72rem; letter-spacing:.1em; font-weight:800; }
+  #onlineBtn { margin-top:10px; background:linear-gradient(135deg,#128a70,#286de0); border-color:#51d7c1; }
+  #cancelOnlineBtn { display:none; margin-top:8px; background:#151b2b; border-color:#303a57; box-shadow:none; }
   .settings-backdrop { position:fixed; inset:0; z-index:20; background:#03050bd9; backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; padding:16px; }
   .settings-backdrop.hidden { display:none; }
   .settings-panel { width:min(480px,100%); max-height:90vh; overflow:auto; border:1px solid #343e5d; border-radius:18px; background:#0d1220; padding:20px; box-shadow:0 0 55px #526bff22; }
@@ -72,6 +78,7 @@
     <div class="stat"><label>Combo</label><strong id="combo">0</strong></div>
     <div class="stat"><label>Speed</label><strong id="speed">1.0×</strong></div>
   </div>
+  <div class="online-bar" id="onlineBar"><span id="onlineStatus">Online mode</span><span class="online-pill" id="onlineScores">YOU 0 · OPPONENT 0</span></div>
   <div class="game-area">
     <div class="gamebox">
       <canvas id="game" width="600" height="800" aria-label="LITERYTHYM falling note game"></canvas>
@@ -79,6 +86,8 @@
         <h1 id="overlayTitle">LITERYTHYM</h1>
         <p id="overlayText">Four columns. Four keys. One endless run.<br>Hit the neon notes when they reach the line.</p>
         <button id="startBtn">START RUN</button>
+        <button id="onlineBtn">PLAY ONLINE 1v1</button>
+        <button id="cancelOnlineBtn">CANCEL SEARCH</button>
       </div>
     </div>
     <div class="keys">
@@ -113,6 +122,7 @@
   const W = canvas.width, H = canvas.height, hitY = 680;
   let notes=[], particles=[], score=0, combo=0, best=0, misses=0, running=false, paused=false, over=false;
   let last=0, spawnTimer=0, elapsed=0, speed=1, flash=0, message='', messageTimer=0, soundOn=true, audio=null;
+  let onlineSocket=null, onlineMode=false, onlineState='idle', onlineMatchId=null, opponentScore=0, onlineFinalScore=null;
   try {
     best = Number(localStorage.getItem('literythym_best') || 0);
     const saved = JSON.parse(localStorage.getItem('literythym_settings') || 'null');
@@ -132,18 +142,31 @@
     if(!soundOn || !audio) return;
     try { const o=audio.createOscillator(), g=audio.createGain(); o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(volume,audio.currentTime); g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration); o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime+duration); } catch(e) {}
   }
+  let lastScoreSent=0;
+  function sendLiveScore(){const now=performance.now();if(now-lastScoreSent>300){lastScoreSent=now;try{onlineSocket.send(JSON.stringify({type:'score',matchId:onlineMatchId,score,combo}));}catch(e){}}}
   function updateStats(){
     $('score').textContent=score.toLocaleString(); $('combo').textContent=combo;
     $('speed').textContent=speed.toFixed(1)+'×'; $('best').textContent=best.toLocaleString();
+    updateOnlineBar();
+    if(onlineMode && onlineSocket && onlineSocket.readyState===WebSocket.OPEN && onlineState==='playing') sendLiveScore();
   }
-  function start(){
-    audioReady(); notes=[]; particles=[]; score=0; combo=0; misses=0; elapsed=0; speed=1; spawnTimer=.6; flash=0; message='READY?'; messageTimer=.8; running=true; paused=false; over=false; last=performance.now();
-    $('overlay').classList.add('hidden'); $('pauseBtn').style.display='inline-block'; $('pauseBtn').textContent='Ⅱ Pause'; updateStats(); requestAnimationFrame(loop);
+  function start(isOnline=false){
+    onlineMode=!!isOnline;
+    if(!onlineMode){onlineState='idle';onlineMatchId=null;}
+    audioReady(); notes=[]; particles=[]; score=0; combo=0; misses=0; elapsed=0; speed=1; opponentScore=0; spawnTimer=.6; flash=0; message='READY?'; messageTimer=.8; running=true; paused=false; over=false; last=performance.now();
+    $('overlay').classList.add('hidden'); $('pauseBtn').style.display='inline-block'; $('pauseBtn').textContent='Ⅱ Pause'; updateStats(); updateOnlineBar(); requestAnimationFrame(loop);
   }
   function endRun(){
     running=false; over=true; $('pauseBtn').style.display='none';
     if(score>best){best=score;try{localStorage.setItem('literythym_best',best)}catch(e){}}
-    updateStats(); $('overlayTitle').textContent='RUN OVER'; $('overlayText').innerHTML=`Score: <b>${score.toLocaleString()}</b><br>Best: <b>${best.toLocaleString()}</b><br>Combo: ${combo} · Misses: ${misses}<br><br>One more run?`; $('startBtn').textContent='PLAY AGAIN'; $('overlay').classList.remove('hidden');
+    updateStats();
+    if(onlineMode && onlineSocket && onlineSocket.readyState===WebSocket.OPEN && onlineState==='playing'){
+      onlineState='finished-wait';
+      onlineSocket.send(JSON.stringify({type:'finished',matchId:onlineMatchId,score}));
+      $('overlayTitle').textContent='SCORE SUBMITTED'; $('overlayText').innerHTML=`Your score: <b>${score.toLocaleString()}</b><br>Waiting for your opponent to finish…`;
+      $('startBtn').style.display='none'; $('onlineBtn').style.display='none'; $('cancelOnlineBtn').style.display='none'; $('overlay').classList.remove('hidden'); updateOnlineBar(); return;
+    }
+    $('overlayTitle').textContent='RUN OVER'; $('overlayText').innerHTML=`Score: <b>${score.toLocaleString()}</b><br>Best: <b>${best.toLocaleString()}</b><br>Combo: ${combo} · Misses: ${misses}<br><br>One more run?`; $('startBtn').textContent='PLAY AGAIN'; $('startBtn').style.display='inline-block'; $('onlineBtn').style.display='inline-block'; $('cancelOnlineBtn').style.display='none'; $('overlay').classList.remove('hidden');
   }
   function togglePause(){
     if(!running && !paused) return;
@@ -238,8 +261,66 @@
     updateStats();
     if(running)requestAnimationFrame(loop);
   }
+  function updateOnlineBar(){
+    const bar=$('onlineBar');
+    if(onlineState==='idle'){bar.classList.remove('visible');return;}
+    bar.classList.add('visible');
+    $('onlineScores').textContent=`YOU ${score.toLocaleString()} · OPPONENT ${opponentScore.toLocaleString()}`;
+    const labels={connecting:'Connecting to matchmaking…',searching:'Searching for a random opponent…',matched:'Opponent found! Get ready…',playing:'ONLINE MATCH IN PROGRESS', 'finished-wait':'Run finished — waiting for opponent',result:'MATCH COMPLETE',error:'Online connection problem'};
+    $('onlineStatus').textContent=labels[onlineState]||'Online match';
+  }
+  function showOnlineOverlay(title,html,showCancel=false){
+    $('overlayTitle').textContent=title; $('overlayText').innerHTML=html;
+    $('startBtn').style.display='none'; $('onlineBtn').style.display='none'; $('cancelOnlineBtn').style.display=showCancel?'inline-block':'none'; $('overlay').classList.remove('hidden');
+  }
+  function connectOnline(){
+    if(onlineSocket && (onlineSocket.readyState===WebSocket.OPEN || onlineSocket.readyState===WebSocket.CONNECTING)){
+      if(onlineState==='searching') return;
+    }
+    onlineMode=true; onlineState='connecting'; opponentScore=0; onlineMatchId=null; updateOnlineBar();
+    showOnlineOverlay('CONNECTING…','Connecting to the LITERYTHYM matchmaking server.');
+    const scheme=location.protocol==='https:'?'wss://':'ws://';
+    onlineSocket=new WebSocket(scheme+location.host);
+    onlineSocket.addEventListener('open',()=>{onlineState='searching';updateOnlineBar();showOnlineOverlay('FINDING OPPONENT','Looking for another player who is online…',true);onlineSocket.send(JSON.stringify({type:'queue'}));});
+    onlineSocket.addEventListener('message',event=>{
+      let msg;try{msg=JSON.parse(event.data)}catch(e){return;}
+      if(msg.type==='queued'){onlineState='searching';showOnlineOverlay('FINDING OPPONENT','You are in the queue. This can take a little while if nobody else is online.',true);updateOnlineBar();}
+      if(msg.type==='matchFound'){onlineMatchId=msg.matchId;opponentScore=0;onlineState='matched';showOnlineOverlay('OPPONENT FOUND!','Your match starts in <b>3 seconds</b>. Get ready!');updateOnlineBar();}
+      if(msg.type==='start'){onlineMatchId=msg.matchId;onlineState='playing';opponentScore=0; $('startBtn').style.display='inline-block';$('onlineBtn').style.display='inline-block';$('cancelOnlineBtn').style.display='none';start(true);}
+      if(msg.type==='score' && msg.matchId===onlineMatchId){opponentScore=Number(msg.score)||0;updateOnlineBar();}
+      if(msg.type==='result' && msg.matchId===onlineMatchId){
+        onlineState='result'; onlineMode=false; onlineFinalScore=msg;
+        const mine=Number(msg.yourScore)||0, theirs=Number(msg.opponentScore)||0;
+        const headline=mine>theirs?'YOU WIN!':mine<theirs?'YOU LOSE':'DRAW!';
+        $('overlayTitle').textContent=headline; $('overlayText').innerHTML=`You: <b>${mine.toLocaleString()}</b><br>Opponent: <b>${theirs.toLocaleString()}</b><br><br>${headline==='YOU WIN!'?'Great rhythm!':headline==='DRAW!'?'Exactly matched!':'Have another go and beat their score.'}`;
+        $('startBtn').textContent='PLAY AGAIN';$('startBtn').style.display='inline-block';$('onlineBtn').textContent='PLAY ONLINE AGAIN';$('onlineBtn').style.display='inline-block';$('cancelOnlineBtn').style.display='none';$('overlay').classList.remove('hidden');updateOnlineBar();
+      }
+      if(msg.type==='opponentLeft'){
+        onlineMode=false;onlineState='idle';onlineMatchId=null;updateOnlineBar();
+        $('overlayTitle').textContent='OPPONENT DISCONNECTED';$('overlayText').textContent='Your opponent left the match. You can try another online game.';$('startBtn').textContent='PLAY AGAIN';$('startBtn').style.display='inline-block';$('onlineBtn').textContent='PLAY ONLINE 1v1';$('onlineBtn').style.display='inline-block';$('cancelOnlineBtn').style.display='none';$('overlay').classList.remove('hidden');
+      }
+      if(msg.type==='error'){onlineState='error';showOnlineOverlay('ONLINE ERROR',msg.message||'Something went wrong. Try again.',false);$('startBtn').style.display='inline-block';$('startBtn').textContent='PLAY OFFLINE';$('onlineBtn').style.display='inline-block';$('onlineBtn').textContent='TRY ONLINE AGAIN';updateOnlineBar();}
+    });
+    onlineSocket.addEventListener('close',()=>{
+      if(['searching','connecting','matched','playing','finished-wait'].includes(onlineState)){
+        onlineMode=false;onlineState='error';updateOnlineBar();
+        if(!running){showOnlineOverlay('CONNECTION LOST','The online server disconnected. It may be waking up or restarting.',false);$('startBtn').style.display='inline-block';$('startBtn').textContent='PLAY OFFLINE';$('onlineBtn').style.display='inline-block';}
+      }
+    });
+    onlineSocket.addEventListener('error',()=>{onlineState='error';updateOnlineBar();});
+  }
+  function cancelOnline(){
+    if(onlineSocket && onlineSocket.readyState===WebSocket.OPEN) onlineSocket.send(JSON.stringify({type:'cancelQueue'}));
+    if(onlineSocket){onlineSocket.close();onlineSocket=null;}
+    onlineMode=false;onlineState='idle';onlineMatchId=null;updateOnlineBar();
+    $('overlayTitle').textContent='LITERYTHYM';$('overlayText').innerHTML='Four columns. Four keys. One endless run.<br>Hit the neon notes when they reach the line.';
+    $('startBtn').textContent='START RUN';$('startBtn').style.display='inline-block';$('onlineBtn').textContent='PLAY ONLINE 1v1';$('onlineBtn').style.display='inline-block';$('cancelOnlineBtn').style.display='none';$('overlay').classList.remove('hidden');
+  }
+
   function idleDraw(){drawBackground();requestAnimationFrame(idleDraw);}
-  $('startBtn').addEventListener('click',()=>{if(paused){paused=false;$('overlay').classList.add('hidden');$('pauseBtn').textContent='Ⅱ Pause';last=performance.now();requestAnimationFrame(loop);}else start();});
+  $('startBtn').addEventListener('click',()=>{if(paused){paused=false;$('overlay').classList.add('hidden');$('pauseBtn').textContent='Ⅱ Pause';last=performance.now();requestAnimationFrame(loop);}else { $('startBtn').style.display='inline-block'; $('onlineBtn').style.display='inline-block'; $('onlineBtn').textContent='PLAY ONLINE 1v1'; start(false); }});
+  $('onlineBtn').addEventListener('click',connectOnline);
+  $('cancelOnlineBtn').addEventListener('click',cancelOnline);
   $('restartBtn').addEventListener('click',start);
   $('pauseBtn').addEventListener('click',togglePause);
   $('soundBtn').addEventListener('click',()=>{soundOn=!soundOn;if(soundOn)audioReady();saveSettings();});
